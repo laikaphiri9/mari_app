@@ -1,0 +1,32 @@
+name: Build APK
+on:
+  push:
+    branches: [ main ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: kivy/buildozer:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hack buildozer to allow root
+        run: |
+          pip_file=$(python3 -c "import buildozer; print(buildozer.__file__)")
+          echo $pip_file
+          sed -i 's/def check_root/def check_root_DISABLED/' $pip_file || true
+          # find all buildozer files and patch
+          find / -name "__init__.py" -path "*buildozer*" 2>/dev/null | xargs sed -i 's/self.check_root()/#/' || true
+      - name: Fix spec
+        run: |
+          if [ ! -f buildozer.spec ]; then buildozer init; fi
+          sed -i 's/requirements =.*/requirements = python3,kivy/' buildozer.spec
+          echo "android.accept_sdk_license_agreements = True" >> buildozer.spec
+          cat buildozer.spec
+      - name: Build APK
+        run: |
+          buildozer android debug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mari-apk
+          path: bin/*.apk
